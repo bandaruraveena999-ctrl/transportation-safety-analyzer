@@ -120,11 +120,17 @@ with st.sidebar:
 
             # Road network
             with st.spinner('Downloading road network...'):
-                G = ox.graph_from_place(city, network_type='drive', simplify=True)
-                edges = ox.graph_to_gdfs(G, nodes=False).reset_index()
-                edges['osmid'] = edges['osmid'].apply(
-                    lambda x: x[0] if isinstance(x, list) else x
-                ).astype(str)
+    try:
+        ox.settings.requests_timeout = 180
+        ox.settings.max_query_area_size = 50000000000
+        G = ox.graph_from_place(city, network_type='drive', simplify=True)
+        edges = ox.graph_to_gdfs(G, nodes=False).reset_index()
+        edges['osmid'] = edges['osmid'].apply(
+            lambda x: x[0] if isinstance(x, list) else x
+        ).astype(str)
+    except Exception as e:
+        st.error(f'Could not download road network for {city}. Try a smaller area like a neighborhood name instead of the full city. Error: {str(e)}')
+        st.stop()
 
             # Snap crashes to roads
             with st.spinner('Snapping crashes to roads...'):
