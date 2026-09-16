@@ -9,7 +9,7 @@ import os
 
 st.set_page_config(layout="wide", page_title="High Injury Network Analyzer")
 
-@st.cache_data(ttl=86400)
+@st.cache_data(ttl=86400, max_entries=2)
 def get_road_network(city):
     try:
         ox.settings.requests_timeout = 180
@@ -88,7 +88,7 @@ with st.sidebar:
                 df = df[(df[lat_col] != 0) & (df[lon_col] != 0)]
                 df[death_col] = pd.to_numeric(df[death_col], errors='coerce').fillna(0)
                 df[injury_col] = pd.to_numeric(df[injury_col], errors='coerce').fillna(0)
-                all_ksi = df[(df[death_col] > 0) | (df[injury_col] > 0)].copy()
+                all_ksi = all_ksi[[lat_col, lon_col, death_col, injury_col, ped_death_col if ped_death_col != 'None' else death_col, bike_death_col if bike_death_col != 'None' else death_col]].copy()
 
             # Apply HIN mode filter
             if hin_mode == 'All KSI crashes':
@@ -260,7 +260,7 @@ if st.session_state.hin_done:
     # Crash points layer
     if show_crashes:
         crash_layer = folium.FeatureGroup(name='KSI Crashes', show=True)
-        for _, row in ksi.head(3000).iterrows():
+        for _, row in ksi.head(1000).iterrows():
             if pd.notna(row[lat_col]) and pd.notna(row[lon_col]):
                 folium.CircleMarker(
                     location=[row[lat_col], row[lon_col]],
