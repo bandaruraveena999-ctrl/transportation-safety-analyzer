@@ -33,36 +33,35 @@ if 'hin_done' not in st.session_state:
 
 # Sidebar
 with st.sidebar:
-    
-    st.header('Controls')
-    
-uploaded_file = st.file_uploader(
-    'Upload crash data',
-    type=['csv', 'zip'],
-    help='Upload a CSV file or a ZIP file containing one CSV.'
-)
+    st.header("Controls")
+
+    uploaded_file = st.file_uploader(
+        "Upload crash data",
+        type=["csv", "zip"],
+        help="Upload a CSV file or a ZIP file containing one CSV."
+    )
 
     if uploaded_file is not None:
-    try:
-        if uploaded_file.name.lower().endswith('.zip'):
-            df = pd.read_csv(
-                uploaded_file,
-                compression='zip',
-                low_memory=False
-            )
-        else:
-            df = pd.read_csv(
-                uploaded_file,
-                low_memory=False
-            )
+        try:
+            if uploaded_file.name.lower().endswith(".zip"):
+                df = pd.read_csv(
+                    uploaded_file,
+                    compression="zip",
+                    low_memory=False
+                )
+            else:
+                df = pd.read_csv(
+                    uploaded_file,
+                    low_memory=False
+                )
 
-        st.success(f'Loaded {len(df):,} crashes')
+            st.success(f"Loaded {len(df):,} crashes")
 
-    except Exception as e:
-        st.error(f'Unable to read the uploaded file: {e}')
-        st.stop()
+        except Exception as e:
+            st.error(f"Unable to read the uploaded file: {e}")
+            st.stop()
 
-        st.subheader('Map Columns')
+        st.subheader("Map Columns")
         st.caption('Required fields')
         lat_col = st.selectbox('Latitude column', df.columns)
         lon_col = st.selectbox('Longitude column', df.columns)
