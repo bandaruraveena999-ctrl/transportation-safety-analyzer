@@ -142,42 +142,102 @@ with st.spinner('Cleaning data...'):
 
             elif hin_mode == 'Pedestrian crashes only':
                 if ped_death_col != 'None' or ped_injury_col != 'None':
-                    ped_filter = pd.Series([False] * len(all_ksi), index=all_ksi.index)
+                    ped_filter = pd.Series(
+                        [False] * len(all_ksi),
+                        index=all_ksi.index
+                    )
+
                     if ped_death_col != 'None':
-                        all_ksi[ped_death_col] = pd.to_numeric(all_ksi[ped_death_col], errors='coerce').fillna(0)
-                        ped_filter = ped_filter | (all_ksi[ped_death_col] > 0)
+                        all_ksi[ped_death_col] = pd.to_numeric(
+                            all_ksi[ped_death_col],
+                            errors='coerce'
+                        ).fillna(0)
+
+                        ped_filter = ped_filter | (
+                            all_ksi[ped_death_col] > 0
+                        )
+
                     if ped_injury_col != 'None':
-                        all_ksi[ped_injury_col] = pd.to_numeric(all_ksi[ped_injury_col], errors='coerce').fillna(0)
-                        ped_filter = ped_filter | (all_ksi[ped_injury_col] > 0)
+                        all_ksi[ped_injury_col] = pd.to_numeric(
+                            all_ksi[ped_injury_col],
+                            errors='coerce'
+                        ).fillna(0)
+
+                        ped_filter = ped_filter | (
+                            all_ksi[ped_injury_col] > 0
+                        )
+
                     ksi = all_ksi[ped_filter].copy()
+
                 else:
-                    st.warning('Please select at least one pedestrian column')
+                    st.warning(
+                        'Please select at least one pedestrian column'
+                    )
                     st.stop()
 
             elif hin_mode == 'Bike crashes only':
                 if bike_death_col != 'None' or bike_injury_col != 'None':
-                    bike_filter = pd.Series([False] * len(all_ksi), index=all_ksi.index)
+                    bike_filter = pd.Series(
+                        [False] * len(all_ksi),
+                        index=all_ksi.index
+                    )
+
                     if bike_death_col != 'None':
-                        all_ksi[bike_death_col] = pd.to_numeric(all_ksi[bike_death_col], errors='coerce').fillna(0)
-                        bike_filter = bike_filter | (all_ksi[bike_death_col] > 0)
+                        all_ksi[bike_death_col] = pd.to_numeric(
+                            all_ksi[bike_death_col],
+                            errors='coerce'
+                        ).fillna(0)
+
+                        bike_filter = bike_filter | (
+                            all_ksi[bike_death_col] > 0
+                        )
+
                     if bike_injury_col != 'None':
-                        all_ksi[bike_injury_col] = pd.to_numeric(all_ksi[bike_injury_col], errors='coerce').fillna(0)
-                        bike_filter = bike_filter | (all_ksi[bike_injury_col] > 0)
+                        all_ksi[bike_injury_col] = pd.to_numeric(
+                            all_ksi[bike_injury_col],
+                            errors='coerce'
+                        ).fillna(0)
+
+                        bike_filter = bike_filter | (
+                            all_ksi[bike_injury_col] > 0
+                        )
+
                     ksi = all_ksi[bike_filter].copy()
+
                 else:
-                    st.warning('Please select at least one bike column')
+                    st.warning(
+                        'Please select at least one bike column'
+                    )
                     st.stop()
 
             elif hin_mode == 'Pedestrian + Bike only':
-                combined_filter = pd.Series([False] * len(all_ksi), index=all_ksi.index)
-                for col in [ped_death_col, ped_injury_col, bike_death_col, bike_injury_col]:
+                combined_filter = pd.Series(
+                    [False] * len(all_ksi),
+                    index=all_ksi.index
+                )
+
+                for col in [
+                    ped_death_col,
+                    ped_injury_col,
+                    bike_death_col,
+                    bike_injury_col
+                ]:
                     if col != 'None':
-                        all_ksi[col] = pd.to_numeric(all_ksi[col], errors='coerce').fillna(0)
-                        combined_filter = combined_filter | (all_ksi[col] > 0)
+                        all_ksi[col] = pd.to_numeric(
+                            all_ksi[col],
+                            errors='coerce'
+                        ).fillna(0)
+
+                        combined_filter = combined_filter | (
+                            all_ksi[col] > 0
+                        )
+
                 if combined_filter.any():
                     ksi = all_ksi[combined_filter].copy()
                 else:
-                    st.warning('Please select at least one pedestrian or bike column')
+                    st.warning(
+                        'Please select at least one pedestrian or bike column'
+                    )
                     st.stop()
 
             st.write(f'KSI crashes: {len(ksi):,}')
