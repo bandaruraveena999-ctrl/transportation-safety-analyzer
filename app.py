@@ -25,9 +25,22 @@ def get_road_network(city):
 st.title('High Injury Network Analyzer')
 
 # Initialize session state
-for key in ['hin_done', 'hin_map', 'hin_csv', 'hin_count', 'hin_edges', 'ksi', 'lat_col', 'lon_col', 'death_col', 'show_hin', 'show_crashes', 'basemap']:
+for key in [
+    'hin_map',
+    'hin_csv',
+    'hin_count',
+    'hin_edges',
+    'ksi',
+    'lat_col',
+    'lon_col',
+    'death_col',
+    'show_hin',
+    'show_crashes',
+    'basemap'
+]:
     if key not in st.session_state:
         st.session_state[key] = None
+
 if 'hin_done' not in st.session_state:
     st.session_state.hin_done = False
 
@@ -103,13 +116,25 @@ with st.sidebar:
             st.session_state.show_crashes = show_crashes
             st.session_state.basemap = basemap
 
-            # Clean data
-            with st.spinner('Cleaning data...'):
-                df = df.dropna(subset=[lat_col, lon_col])
-                df = df[(df[lat_col] != 0) & (df[lon_col] != 0)]
-                df[death_col] = pd.to_numeric(df[death_col], errors='coerce').fillna(0)
-                df[injury_col] = pd.to_numeric(df[injury_col], errors='coerce').fillna(0)
-                all_ksi = all_ksi[[lat_col, lon_col, death_col, injury_col, ped_death_col if ped_death_col != 'None' else death_col, bike_death_col if bike_death_col != 'None' else death_col]].copy()
+         # Clean data
+with st.spinner('Cleaning data...'):
+    df = df.dropna(subset=[lat_col, lon_col])
+    df = df[(df[lat_col] != 0) & (df[lon_col] != 0)]
+
+    df[death_col] = pd.to_numeric(
+        df[death_col],
+        errors='coerce'
+    ).fillna(0)
+
+    df[injury_col] = pd.to_numeric(
+        df[injury_col],
+        errors='coerce'
+    ).fillna(0)
+
+    all_ksi = df[
+        (df[death_col] > 0) |
+        (df[injury_col] > 0)
+    ].copy()
 
             # Apply HIN mode filter
             if hin_mode == 'All KSI crashes':
