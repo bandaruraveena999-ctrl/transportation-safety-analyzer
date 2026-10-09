@@ -110,31 +110,31 @@ with st.sidebar:
 
         generate = st.button('Generate HIN', type='primary')
 
-        if generate:
+                if generate:
             st.session_state.hin_done = False
             st.session_state.show_hin = show_hin
             st.session_state.show_crashes = show_crashes
             st.session_state.basemap = basemap
 
-         # Clean data
-with st.spinner('Cleaning data...'):
-    df = df.dropna(subset=[lat_col, lon_col])
-    df = df[(df[lat_col] != 0) & (df[lon_col] != 0)]
+            # Clean data
+            with st.spinner('Cleaning data...'):
+                df = df.dropna(subset=[lat_col, lon_col])
+                df = df[(df[lat_col] != 0) & (df[lon_col] != 0)]
 
-    df[death_col] = pd.to_numeric(
-        df[death_col],
-        errors='coerce'
-    ).fillna(0)
+                df[death_col] = pd.to_numeric(
+                    df[death_col],
+                    errors='coerce'
+                ).fillna(0)
 
-    df[injury_col] = pd.to_numeric(
-        df[injury_col],
-        errors='coerce'
-    ).fillna(0)
+                df[injury_col] = pd.to_numeric(
+                    df[injury_col],
+                    errors='coerce'
+                ).fillna(0)
 
-    all_ksi = df[
-        (df[death_col] > 0) |
-        (df[injury_col] > 0)
-    ].copy()
+                all_ksi = df[
+                    (df[death_col] > 0) |
+                    (df[injury_col] > 0)
+                ].copy()
 
             # Apply HIN mode filter
             if hin_mode == 'All KSI crashes':
@@ -174,6 +174,73 @@ with st.spinner('Cleaning data...'):
                         'Please select at least one pedestrian column'
                     )
                     st.stop()
+
+            elif hin_mode == 'Bike crashes only':
+                if bike_death_col != 'None' or bike_injury_col != 'None':
+                    bike_filter = pd.Series(
+                        [False] * len(all_ksi),
+                        index=all_ksi.index
+                    )
+
+                    if bike_death_col != 'None':
+                        all_ksi[bike_death_col] = pd.to_numeric(
+                            all_ksi[bike_death_col],
+                            errors='coerce'
+                        ).fillna(0)
+
+                        bike_filter = bike_filter | (
+                            all_ksi[bike_death_col] > 0
+                        )
+
+                    if bike_injury_col != 'None':
+                        all_ksi[bike_injury_col] = pd.to_numeric(
+                            all_ksi[bike_injury_col],
+                            errors='coerce'
+                        ).fillna(0)
+
+                        bike_filter = bike_filter | (
+                            all_ksi[bike_injury_col] > 0
+                        )
+
+                    ksi = all_ksi[bike_filter].copy()
+
+                else:
+                    st.warning(
+                        'Please select at least one bike column'
+                    )
+                    st.stop()
+
+            elif hin_mode == 'Pedestrian + Bike only':
+                combined_filter = pd.Series(
+                    [False] * len(all_ksi),
+                    index=all_ksi.index
+                )
+
+                for col in [
+                    ped_death_col,
+                    ped_injury_col,
+                    bike_death_col,
+                    bike_injury_col
+                ]:
+                    if col != 'None':
+                        all_ksi[col] = pd.to_numeric(
+                            all_ksi[col],
+                            errors='coerce'
+                        ).fillna(0)
+
+                        combined_filter = combined_filter | (
+                            all_ksi[col] > 0
+                        )
+
+                if combined_filter.any():
+                    ksi = all_ksi[combined_filter].copy()
+                else:
+                    st.warning(
+                        'Please select at least one pedestrian or bike column'
+                    )
+                    st.stop()
+
+            st.write(f'KSI crashes: {len(ksi):,}')
 
             elif hin_mode == 'Bike crashes only':
                 if bike_death_col != 'None' or bike_injury_col != 'None':
