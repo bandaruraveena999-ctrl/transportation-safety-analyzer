@@ -110,7 +110,7 @@ with st.sidebar:
 
         generate = st.button('Generate HIN', type='primary')
 
-                if generate:
+        if generate:
             st.session_state.hin_done = False
             st.session_state.show_hin = show_hin
             st.session_state.show_crashes = show_crashes
