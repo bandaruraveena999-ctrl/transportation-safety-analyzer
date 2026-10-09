@@ -170,9 +170,7 @@ with st.sidebar:
                     ksi = all_ksi[ped_filter].copy()
 
                 else:
-                    st.warning(
-                        'Please select at least one pedestrian column'
-                    )
+                    st.warning('Please select at least one pedestrian column')
                     st.stop()
 
             elif hin_mode == 'Bike crashes only':
@@ -205,9 +203,7 @@ with st.sidebar:
                     ksi = all_ksi[bike_filter].copy()
 
                 else:
-                    st.warning(
-                        'Please select at least one bike column'
-                    )
+                    st.warning('Please select at least one bike column')
                     st.stop()
 
             elif hin_mode == 'Pedestrian + Bike only':
