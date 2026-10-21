@@ -15,52 +15,83 @@ st.set_page_config(
 
 @st.cache_data(ttl=3600, max_entries=1)
 def get_road_network(west, south, east, north):
-    try:
-        ox.settings.requests_timeout = 300
 
-        bbox = (
-            west,
-            south,
-            east,
-            north
-        )
+    overpass_servers = [
+        "https://overpass-api.de/api",
+        "https://overpass.kumi.systems/api",
+        "https://overpass.nchc.org.tw/api"
+    ]
 
-        G = ox.graph_from_bbox(
-            bbox,
-            network_type="drive",
-            simplify=True,
-            retain_all=False
-        )
+    bbox = (
+        west,
+        south,
+        east,
+        north
+    )
 
-        edges = ox.graph_to_gdfs(
-            G,
-            nodes=False
-        ).reset_index()
+    last_error = None
 
-        edges["osmid"] = edges["osmid"].apply(
-            lambda x: x[0] if isinstance(x, list) else x
-        ).astype(str)
+    for server in overpass_servers:
 
-        keep_cols = [
-            col
-            for col in [
-                "u",
-                "v",
-                "key",
-                "osmid",
-                "name",
-                "geometry"
+        try:
+            ox.settings.overpass_url = server
+            ox.settings.requests_timeout = 180
+            ox.settings.use_cache = True
+
+            st.info(
+                f"Trying road network server: {server}"
+            )
+
+            G = ox.graph_from_bbox(
+                bbox,
+                network_type="drive",
+                simplify=True,
+                retain_all=False
+            )
+
+            edges = ox.graph_to_gdfs(
+                G,
+                nodes=False
+            ).reset_index()
+
+            edges["osmid"] = edges["osmid"].apply(
+                lambda x: x[0]
+                if isinstance(x, list)
+                else x
+            ).astype(str)
+
+            keep_cols = [
+                col
+                for col in [
+                    "u",
+                    "v",
+                    "key",
+                    "osmid",
+                    "name",
+                    "geometry"
+                ]
+                if col in edges.columns
             ]
-            if col in edges.columns
-        ]
 
-        return edges[keep_cols].copy()
+            return edges[
+                keep_cols
+            ].copy()
 
-    except Exception as e:
-        st.error(
-            f"Road network download failed: {e}"
-        )
-        return None
+        except Exception as e:
+
+            last_error = e
+
+            st.warning(
+                f"Server failed: {server}"
+            )
+
+    st.error(
+        f"All road network servers failed. "
+        f"Last error: {last_error}"
+    )
+
+    return None
+
 
 
 st.title(
