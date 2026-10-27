@@ -18,8 +18,9 @@ def get_road_network(west, south, east, north):
 
     overpass_servers = [
         "https://overpass-api.de/api",
-        "https://overpass.kumi.systems/api",
-        "https://overpass.nchc.org.tw/api"
+        "https://lz4.overpass-api.de/api",
+        "https://z.overpass-api.de/api",
+        "https://overpass.kumi.systems/api"
     ]
 
     bbox = (
@@ -35,7 +36,7 @@ def get_road_network(west, south, east, north):
 
         try:
             ox.settings.overpass_url = server
-            ox.settings.requests_timeout = 180
+            ox.settings.requests_timeout = 90
             ox.settings.use_cache = True
 
             st.info(
