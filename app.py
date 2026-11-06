@@ -5,7 +5,6 @@ import folium
 
 from folium.plugins import Draw, MeasureControl, MiniMap
 from overturemaps import core
-from streamlit_folium import st_folium
 
 
 # ---------------------------------------------------------
@@ -26,14 +25,6 @@ st.title("High Injury Network Analyzer")
 
 @st.cache_data(ttl=3600, max_entries=1)
 def get_road_network(west, south, east, north):
-    """
-    Download road transportation segments from Overture Maps
-    for the crash-data bounding box.
-
-    Bounding box order:
-    west, south, east, north
-    """
-
     try:
         bbox = (
             west,
@@ -50,8 +41,7 @@ def get_road_network(west, south, east, north):
         if roads is None or roads.empty:
             return None
 
-        # Keep road segments only.
-        # Overture transportation segments can also include rail/water/etc.
+        # Keep road segments only
         if "subtype" in roads.columns:
             roads = roads[
                 roads["subtype"] == "road"
@@ -60,7 +50,7 @@ def get_road_network(west, south, east, north):
         if roads.empty:
             return None
 
-        # Ensure geometry is valid
+        # Remove invalid geometries
         roads = roads[
             roads.geometry.notna()
         ].copy()
@@ -68,29 +58,19 @@ def get_road_network(west, south, east, north):
         if roads.empty:
             return None
 
-        # Overture feature ID becomes our road segment ID
+        # Create road segment ID
         roads["segment_id"] = (
-            roads["id"]
-            .astype(str)
+            roads["id"].astype(str)
         )
 
-        # Keep only fields required by the HIN workflow
-        keep_cols = [
-            col
-            for col in [
+        # Keep only columns required for HIN
+        roads = roads[
+            [
                 "segment_id",
-                "class",
-                "subclass",
                 "geometry"
             ]
-            if col in roads.columns
-        ]
-
-        roads = roads[
-            keep_cols
         ].copy()
 
-        # Overture geometries are WGS84
         if roads.crs is None:
             roads = roads.set_crs(
                 "EPSG:4326"
@@ -135,51 +115,47 @@ if "hin_done" not in st.session_state:
 # ---------------------------------------------------------
 
 with st.sidebar:
-
     st.header("Controls")
 
     uploaded_file = st.file_uploader(
         "Upload crash data",
         type=["csv", "zip"],
-        help=(
-            "Upload a CSV file or a ZIP file "
-            "containing one CSV."
-        )
+        help="Upload a CSV file or ZIP file containing one CSV."
     )
 
     if uploaded_file is not None:
 
         # -------------------------------------------------
-        # READ UPLOADED DATA
+        # READ ONLY COLUMN NAMES FIRST
         # -------------------------------------------------
 
         try:
+            uploaded_file.seek(0)
 
             if uploaded_file.name.lower().endswith(".zip"):
-
-                df = pd.read_csv(
+                header_df = pd.read_csv(
                     uploaded_file,
                     compression="zip",
-                    low_memory=False
+                    nrows=0
                 )
-
             else:
-
-                df = pd.read_csv(
+                header_df = pd.read_csv(
                     uploaded_file,
-                    low_memory=False
+                    nrows=0
                 )
+
+            columns = list(
+                header_df.columns
+            )
 
             st.success(
-                f"Loaded {len(df):,} crash records"
+                "Crash file uploaded successfully"
             )
 
         except Exception as e:
-
             st.error(
                 f"Unable to read uploaded file: {e}"
             )
-
             st.stop()
 
 
@@ -187,28 +163,32 @@ with st.sidebar:
         # COLUMN SELECTION
         # -------------------------------------------------
 
-        st.subheader("Map Columns")
+        st.subheader(
+            "Map Columns"
+        )
 
-        st.caption("Required fields")
+        st.caption(
+            "Required fields"
+        )
 
         lat_col = st.selectbox(
             "Latitude column",
-            df.columns
+            columns
         )
 
         lon_col = st.selectbox(
             "Longitude column",
-            df.columns
+            columns
         )
 
         death_col = st.selectbox(
             "Death count column",
-            df.columns
+            columns
         )
 
         injury_col = st.selectbox(
             "Serious injury column",
-            df.columns
+            columns
         )
 
 
@@ -216,7 +196,9 @@ with st.sidebar:
         # OPTIONAL FILTERS
         # -------------------------------------------------
 
-        st.subheader("Optional Filters")
+        st.subheader(
+            "Optional Filters"
+        )
 
         st.caption(
             "Leave as None if the field is not available."
@@ -224,7 +206,7 @@ with st.sidebar:
 
         optional_cols = (
             ["None"]
-            + list(df.columns)
+            + columns
         )
 
         ped_death_col = st.selectbox(
@@ -252,7 +234,9 @@ with st.sidebar:
         # HIN MODE
         # -------------------------------------------------
 
-        st.subheader("HIN Mode")
+        st.subheader(
+            "HIN Mode"
+        )
 
         hin_mode = st.radio(
             "Generate HIN for:",
@@ -269,7 +253,9 @@ with st.sidebar:
         # HIN SETTINGS
         # -------------------------------------------------
 
-        st.subheader("HIN Settings")
+        st.subheader(
+            "HIN Settings"
+        )
 
         hin_threshold = st.slider(
             "Minimum KSI crashes for HIN",
@@ -283,7 +269,9 @@ with st.sidebar:
         # MAP DISPLAY
         # -------------------------------------------------
 
-        st.subheader("Map Display")
+        st.subheader(
+            "Map Display"
+        )
 
         show_crashes = st.checkbox(
             "Show crash points",
@@ -306,7 +294,7 @@ with st.sidebar:
 
 
         # -------------------------------------------------
-        # GENERATE BUTTON
+        # GENERATE
         # -------------------------------------------------
 
         generate = st.button(
@@ -333,6 +321,65 @@ with st.sidebar:
 
 
             # -------------------------------------------------
+            # LOAD ONLY REQUIRED COLUMNS
+            # -------------------------------------------------
+
+            required_cols = [
+                lat_col,
+                lon_col,
+                death_col,
+                injury_col
+            ]
+
+            for col in [
+                ped_death_col,
+                ped_injury_col,
+                bike_death_col,
+                bike_injury_col
+            ]:
+                if (
+                    col != "None"
+                    and
+                    col not in required_cols
+                ):
+                    required_cols.append(
+                        col
+                    )
+
+
+            try:
+                uploaded_file.seek(0)
+
+                with st.spinner(
+                    "Loading required crash fields..."
+                ):
+
+                    if uploaded_file.name.lower().endswith(".zip"):
+                        df = pd.read_csv(
+                            uploaded_file,
+                            compression="zip",
+                            usecols=required_cols,
+                            low_memory=False
+                        )
+                    else:
+                        df = pd.read_csv(
+                            uploaded_file,
+                            usecols=required_cols,
+                            low_memory=False
+                        )
+
+                st.write(
+                    f"Processing {len(df):,} crash records"
+                )
+
+            except Exception as e:
+                st.error(
+                    f"Unable to load crash data: {e}"
+                )
+                st.stop()
+
+
+            # -------------------------------------------------
             # CLEAN DATA
             # -------------------------------------------------
 
@@ -340,68 +387,62 @@ with st.sidebar:
                 "Cleaning crash data..."
             ):
 
-                working_df = df.copy()
-
-                working_df[lat_col] = pd.to_numeric(
-                    working_df[lat_col],
+                df[lat_col] = pd.to_numeric(
+                    df[lat_col],
                     errors="coerce"
                 )
 
-                working_df[lon_col] = pd.to_numeric(
-                    working_df[lon_col],
+                df[lon_col] = pd.to_numeric(
+                    df[lon_col],
                     errors="coerce"
                 )
 
-                working_df = working_df.dropna(
+                df = df.dropna(
                     subset=[
                         lat_col,
                         lon_col
                     ]
                 )
 
-                # Remove invalid coordinates
-                working_df = working_df[
-                    working_df[lat_col].between(
+                df = df[
+                    df[lat_col].between(
                         -90,
                         90
                     )
                     &
-                    working_df[lon_col].between(
+                    df[lon_col].between(
                         -180,
                         180
                     )
                     &
-                    (working_df[lat_col] != 0)
+                    (df[lat_col] != 0)
                     &
-                    (working_df[lon_col] != 0)
-                ].copy()
+                    (df[lon_col] != 0)
+                ]
 
-                working_df[death_col] = pd.to_numeric(
-                    working_df[death_col],
+                df[death_col] = pd.to_numeric(
+                    df[death_col],
                     errors="coerce"
                 ).fillna(0)
 
-                working_df[injury_col] = pd.to_numeric(
-                    working_df[injury_col],
+                df[injury_col] = pd.to_numeric(
+                    df[injury_col],
                     errors="coerce"
                 ).fillna(0)
 
-                # KSI = fatal or serious injury crash
-                all_ksi = working_df[
-                    (working_df[death_col] > 0)
+                all_ksi = df[
+                    (df[death_col] > 0)
                     |
-                    (working_df[injury_col] > 0)
-                ].copy()
+                    (df[injury_col] > 0)
+                ]
+
+                del df
 
 
             if all_ksi.empty:
-
                 st.warning(
-                    "No KSI crashes were found using "
-                    "the selected death and serious "
-                    "injury columns."
+                    "No KSI crashes were found."
                 )
-
                 st.stop()
 
 
@@ -411,7 +452,7 @@ with st.sidebar:
 
             if hin_mode == "All KSI crashes":
 
-                ksi = all_ksi.copy()
+                ksi = all_ksi
 
 
             elif hin_mode == "Pedestrian crashes only":
@@ -421,11 +462,9 @@ with st.sidebar:
                     and
                     ped_injury_col == "None"
                 ):
-
                     st.warning(
                         "Select at least one pedestrian field."
                     )
-
                     st.stop()
 
                 ped_filter = pd.Series(
@@ -435,13 +474,10 @@ with st.sidebar:
 
                 if ped_death_col != "None":
 
-                    all_ksi[ped_death_col] = (
-                        pd.to_numeric(
-                            all_ksi[ped_death_col],
-                            errors="coerce"
-                        )
-                        .fillna(0)
-                    )
+                    all_ksi[ped_death_col] = pd.to_numeric(
+                        all_ksi[ped_death_col],
+                        errors="coerce"
+                    ).fillna(0)
 
                     ped_filter = (
                         ped_filter
@@ -454,13 +490,10 @@ with st.sidebar:
 
                 if ped_injury_col != "None":
 
-                    all_ksi[ped_injury_col] = (
-                        pd.to_numeric(
-                            all_ksi[ped_injury_col],
-                            errors="coerce"
-                        )
-                        .fillna(0)
-                    )
+                    all_ksi[ped_injury_col] = pd.to_numeric(
+                        all_ksi[ped_injury_col],
+                        errors="coerce"
+                    ).fillna(0)
 
                     ped_filter = (
                         ped_filter
@@ -473,7 +506,7 @@ with st.sidebar:
 
                 ksi = all_ksi[
                     ped_filter
-                ].copy()
+                ]
 
 
             elif hin_mode == "Bike crashes only":
@@ -483,11 +516,9 @@ with st.sidebar:
                     and
                     bike_injury_col == "None"
                 ):
-
                     st.warning(
                         "Select at least one bike field."
                     )
-
                     st.stop()
 
                 bike_filter = pd.Series(
@@ -497,13 +528,10 @@ with st.sidebar:
 
                 if bike_death_col != "None":
 
-                    all_ksi[bike_death_col] = (
-                        pd.to_numeric(
-                            all_ksi[bike_death_col],
-                            errors="coerce"
-                        )
-                        .fillna(0)
-                    )
+                    all_ksi[bike_death_col] = pd.to_numeric(
+                        all_ksi[bike_death_col],
+                        errors="coerce"
+                    ).fillna(0)
 
                     bike_filter = (
                         bike_filter
@@ -516,13 +544,10 @@ with st.sidebar:
 
                 if bike_injury_col != "None":
 
-                    all_ksi[bike_injury_col] = (
-                        pd.to_numeric(
-                            all_ksi[bike_injury_col],
-                            errors="coerce"
-                        )
-                        .fillna(0)
-                    )
+                    all_ksi[bike_injury_col] = pd.to_numeric(
+                        all_ksi[bike_injury_col],
+                        errors="coerce"
+                    ).fillna(0)
 
                     bike_filter = (
                         bike_filter
@@ -535,10 +560,10 @@ with st.sidebar:
 
                 ksi = all_ksi[
                     bike_filter
-                ].copy()
+                ]
 
 
-            elif hin_mode == "Pedestrian + Bike only":
+            else:
 
                 selected_cols = [
                     ped_death_col,
@@ -551,12 +576,9 @@ with st.sidebar:
                     col == "None"
                     for col in selected_cols
                 ):
-
                     st.warning(
-                        "Select at least one pedestrian "
-                        "or bike field."
+                        "Select at least one pedestrian or bike field."
                     )
-
                     st.stop()
 
                 combined_filter = pd.Series(
@@ -568,13 +590,10 @@ with st.sidebar:
 
                     if col != "None":
 
-                        all_ksi[col] = (
-                            pd.to_numeric(
-                                all_ksi[col],
-                                errors="coerce"
-                            )
-                            .fillna(0)
-                        )
+                        all_ksi[col] = pd.to_numeric(
+                            all_ksi[col],
+                            errors="coerce"
+                        ).fillna(0)
 
                         combined_filter = (
                             combined_filter
@@ -587,17 +606,17 @@ with st.sidebar:
 
                 ksi = all_ksi[
                     combined_filter
-                ].copy()
+                ]
 
 
             if ksi.empty:
-
                 st.warning(
-                    "No crash records match "
-                    "the selected HIN mode."
+                    "No crashes match the selected HIN mode."
                 )
-
                 st.stop()
+
+
+            del all_ksi
 
 
             st.write(
@@ -606,90 +625,68 @@ with st.sidebar:
 
 
             # -------------------------------------------------
-            # DETERMINE STUDY AREA
+            # STUDY AREA
             # -------------------------------------------------
 
-            with st.spinner(
-                "Determining crash study area..."
+            buffer = 0.01
+
+            south = (
+                float(
+                    ksi[lat_col].min()
+                )
+                - buffer
+            )
+
+            north = (
+                float(
+                    ksi[lat_col].max()
+                )
+                + buffer
+            )
+
+            west = (
+                float(
+                    ksi[lon_col].min()
+                )
+                - buffer
+            )
+
+            east = (
+                float(
+                    ksi[lon_col].max()
+                )
+                + buffer
+            )
+
+            lat_span = (
+                north
+                - south
+            )
+
+            lon_span = (
+                east
+                - west
+            )
+
+
+            if (
+                lat_span > 2.0
+                or
+                lon_span > 2.0
             ):
-
-                # Approximately 1 km latitude/longitude
-                # buffer in many US locations.
-                buffer = 0.01
-
-                south = (
-                    float(
-                        ksi[lat_col].min()
-                    )
-                    - buffer
+                st.error(
+                    "Crash records span a very large geographic area. "
+                    "Filter the dataset to one city or study region."
                 )
-
-                north = (
-                    float(
-                        ksi[lat_col].max()
-                    )
-                    + buffer
-                )
-
-                west = (
-                    float(
-                        ksi[lon_col].min()
-                    )
-                    - buffer
-                )
-
-                east = (
-                    float(
-                        ksi[lon_col].max()
-                    )
-                    + buffer
-                )
-
-                lat_span = (
-                    north
-                    - south
-                )
-
-                lon_span = (
-                    east
-                    - west
-                )
-
-
-                # Prevent accidental nationwide/multi-state
-                # requests caused by bad coordinates.
-                if (
-                    lat_span > 2.0
-                    or
-                    lon_span > 2.0
-                ):
-
-                    st.error(
-                        "The crash records span a very "
-                        "large geographic area. "
-                        "Please filter the dataset to "
-                        "one city or study region."
-                    )
-
-                    st.stop()
-
-
-                st.caption(
-                    "Study area: "
-                    f"West {west:.5f}, "
-                    f"South {south:.5f}, "
-                    f"East {east:.5f}, "
-                    f"North {north:.5f}"
-                )
+                st.stop()
 
 
             # -------------------------------------------------
-            # DOWNLOAD OVERTURE ROAD NETWORK
+            # ROAD NETWORK
             # -------------------------------------------------
 
             with st.spinner(
-                "Downloading road network from "
-                "Overture Maps..."
+                "Downloading road network from Overture Maps..."
             ):
 
                 edges = get_road_network(
@@ -705,12 +702,9 @@ with st.sidebar:
                 or
                 edges.empty
             ):
-
                 st.error(
-                    "Could not retrieve road network "
-                    "data for this study area."
+                    "Could not retrieve road network data."
                 )
-
                 st.stop()
 
 
@@ -720,7 +714,7 @@ with st.sidebar:
 
 
             # -------------------------------------------------
-            # CREATE CRASH GEODATAFRAME
+            # SPATIAL DATA
             # -------------------------------------------------
 
             with st.spinner(
@@ -728,7 +722,7 @@ with st.sidebar:
             ):
 
                 ksi_gdf = gpd.GeoDataFrame(
-                    ksi.copy(),
+                    ksi,
                     geometry=gpd.points_from_xy(
                         ksi[lon_col],
                         ksi[lat_col]
@@ -736,28 +730,20 @@ with st.sidebar:
                     crs="EPSG:4326"
                 )
 
-
-                # Use an appropriate local projected CRS.
-                # This is more accurate for nearest-road
-                # distances than Web Mercator.
                 projected_crs = (
                     ksi_gdf.estimate_utm_crs()
                 )
 
-
                 if projected_crs is None:
-
                     projected_crs = (
                         "EPSG:3857"
                     )
-
 
                 ksi_projected = (
                     ksi_gdf.to_crs(
                         projected_crs
                     )
                 )
-
 
                 edges_projected = (
                     edges.to_crs(
@@ -767,46 +753,36 @@ with st.sidebar:
 
 
             # -------------------------------------------------
-            # SNAP CRASHES TO NEAREST ROAD
+            # SNAP CRASHES TO ROADS
             # -------------------------------------------------
 
             with st.spinner(
-                "Snapping crashes to nearest "
-                "road segments..."
+                "Snapping crashes to nearest roads..."
             ):
 
                 joined = gpd.sjoin_nearest(
                     ksi_projected,
                     edges_projected,
-                    how="left",
-                    distance_col="distance_to_road"
+                    how="left"
                 )
 
-
-                # Remove unmatched crashes
                 joined = joined.dropna(
                     subset=["segment_id"]
-                ).copy()
-
-
-                if joined.empty:
-
-                    st.error(
-                        "No crashes could be matched "
-                        "to road segments."
-                    )
-
-                    st.stop()
-
-
-                joined["segment_id"] = (
-                    joined["segment_id"]
-                    .astype(str)
                 )
+
+                joined[
+                    "segment_id"
+                ] = joined[
+                    "segment_id"
+                ].astype(str)
+
+
+            del ksi_projected
+            del edges_projected
 
 
             # -------------------------------------------------
-            # SCORE ROAD SEGMENTS
+            # SCORE SEGMENTS
             # -------------------------------------------------
 
             with st.spinner(
@@ -834,28 +810,16 @@ with st.sidebar:
                     .reset_index()
                 )
 
-
                 hin = scores[
                     scores["total_ksi"]
                     >= hin_threshold
-                ].copy()
-
-
-                if hin.empty:
-
-                    st.warning(
-                        "No road segments meet the "
-                        f"current HIN threshold of "
-                        f"{hin_threshold} KSI crashes."
-                    )
-
+                ]
 
                 hin_edges = edges[
                     edges["segment_id"].isin(
                         hin["segment_id"]
                     )
-                ].copy()
-
+                ]
 
                 if not hin_edges.empty:
 
@@ -867,7 +831,6 @@ with st.sidebar:
                         )
                     )
 
-
                     hin_edges = (
                         hin_edges.to_crs(
                             "EPSG:4326"
@@ -875,7 +838,6 @@ with st.sidebar:
                     )
 
 
-                # Store results
                 st.session_state.hin_edges = (
                     hin_edges
                 )
@@ -912,13 +874,12 @@ with st.sidebar:
 
 
                 st.success(
-                    f"Done! {len(hin):,} "
-                    "HIN segments found."
+                    f"Done! {len(hin):,} HIN segments found."
                 )
 
 
 # ---------------------------------------------------------
-# MAIN RESULTS AREA
+# RESULTS
 # ---------------------------------------------------------
 
 if st.session_state.hin_done:
@@ -964,18 +925,15 @@ if st.session_state.hin_done:
         st.columns(4)
     )
 
-
     col1.metric(
         "Total KSI Crashes",
         f"{len(ksi):,}"
     )
 
-
     col2.metric(
         "HIN Segments",
         f"{st.session_state.hin_count:,}"
     )
-
 
     fatal_count = int(
         (
@@ -983,7 +941,6 @@ if st.session_state.hin_done:
             > 0
         ).sum()
     )
-
 
     col3.metric(
         "Fatal Crashes",
@@ -1015,7 +972,7 @@ if st.session_state.hin_done:
 
 
     # -----------------------------------------------------
-    # MAP CENTER
+    # MAP
     # -----------------------------------------------------
 
     center_lat = float(
@@ -1078,7 +1035,6 @@ if st.session_state.hin_done:
             name="High Injury Network",
             show=True
         )
-
 
         max_ksi = float(
             hin_edges[
@@ -1149,7 +1105,6 @@ if st.session_state.hin_done:
                     hin_layer
                 )
 
-
         hin_layer.add_to(m)
 
 
@@ -1164,11 +1119,9 @@ if st.session_state.hin_done:
             show=True
         )
 
-
-        # Limit rendered markers to protect browser
-        # performance on very large crash datasets.
+        # Keep this low to reduce map memory usage
         for _, row in (
-            ksi.head(2000).iterrows()
+            ksi.head(500).iterrows()
         ):
 
             if (
@@ -1202,7 +1155,6 @@ if st.session_state.hin_done:
                     crash_layer
                 )
 
-
         crash_layer.add_to(m)
 
 
@@ -1224,52 +1176,11 @@ if st.session_state.hin_done:
         font-size: 13px;
     ">
         <b>High Injury Network</b><br><br>
-
-        <i style="
-            background:#8B0000;
-            width:20px;
-            height:4px;
-            display:inline-block;
-            margin-right:8px;
-        "></i>
-        Extreme<br>
-
-        <i style="
-            background:#FF0000;
-            width:20px;
-            height:4px;
-            display:inline-block;
-            margin-right:8px;
-        "></i>
-        High<br>
-
-        <i style="
-            background:#FF4500;
-            width:20px;
-            height:4px;
-            display:inline-block;
-            margin-right:8px;
-        "></i>
-        Medium<br>
-
-        <i style="
-            background:#FF8C00;
-            width:20px;
-            height:4px;
-            display:inline-block;
-            margin-right:8px;
-        "></i>
-        Lower<br>
-
-        <i style="
-            background:yellow;
-            border-radius:50%;
-            width:10px;
-            height:10px;
-            display:inline-block;
-            margin-right:8px;
-        "></i>
-        KSI Crash<br>
+        <span style="color:#8B0000;">━━</span> Extreme<br>
+        <span style="color:#FF0000;">━━</span> High<br>
+        <span style="color:#FF4500;">━━</span> Medium<br>
+        <span style="color:#FF8C00;">━━</span> Lower<br>
+        <span style="color:yellow;">●</span> KSI Crash
     </div>
     """
 
@@ -1288,25 +1199,24 @@ if st.session_state.hin_done:
 
 
     # -----------------------------------------------------
-    # DISPLAY MAP
-    # -----------------------------------------------------
-
-    st_folium(
-        m,
-        width=None,
-        height=650,
-        returned_objects=[]
-    )
-
-
-    # -----------------------------------------------------
-    # DOWNLOADS
+    # RENDER MAP WITHOUT STREAMLIT-FOLIUM
     # -----------------------------------------------------
 
     map_html = (
         m.get_root().render()
     )
 
+
+    st.components.v1.html(
+        map_html,
+        height=650,
+        scrolling=False
+    )
+
+
+    # -----------------------------------------------------
+    # DOWNLOADS
+    # -----------------------------------------------------
 
     st.subheader(
         "Download Results"
